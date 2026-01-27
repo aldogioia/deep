@@ -6,7 +6,8 @@ class CurriculumLearning:
         self.optimizer = optimizer
         self.loss_fn = loss_fn
 
-    def teacher_forcing(self, x, y):
+    @tf.function(reduce_retracing=True)
+    def teacher_forcing_step(self, x, y):
         with tf.GradientTape() as tape:
             preds = self.model(
                 encoder_input=x,
@@ -19,6 +20,7 @@ class CurriculumLearning:
         self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))
         return loss
     
+    @tf.function(reduce_retracing=True)
     def masked_modeling_step(self, x, y, mask_prob=0.15):
         mask = tf.cast(
             tf.random.uniform(tf.shape(y)) < mask_prob,
@@ -42,6 +44,7 @@ class CurriculumLearning:
         self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))
         return loss
     
+    @tf.function(reduce_retracing=True)
     def scheduled_sampling_step(self, x, y, sampling_prob):
         batch, T, d = tf.shape(y)[0], tf.shape(y)[1], tf.shape(y)[2]
 

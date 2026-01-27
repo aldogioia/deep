@@ -5,8 +5,10 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 
 class QuantumDataManager:
-    def __init__(self, file_path, config):
-        self.file_path = file_path
+    def __init__(self, config):
+        self.file_path = 'data/trajectories.csv'
+        
+        self.config = config
         
         self.input_width = config['window_size']
         self.forecast_horizon = config['forecast_horizon']
@@ -84,9 +86,11 @@ class QuantumDataManager:
             self.load_and_process()
 
         train_ds = tf.data.Dataset.from_tensor_slices((self.X_train, self.y_train))
+        train_ds = train_ds.cache()
         train_ds = train_ds.shuffle(1000).batch(self.batch_size).prefetch(tf.data.AUTOTUNE)
 
         val_ds = tf.data.Dataset.from_tensor_slices((self.X_test, self.y_test))
+        val_ds = val_ds.cache()
         val_ds = val_ds.batch(self.batch_size).prefetch(tf.data.AUTOTUNE)
         
         return train_ds, val_ds
