@@ -1,4 +1,4 @@
-from tensorflow.keras import layers, Model
+from keras import layers, Model
 
 class QuantumRNN(Model):
     def __init__(self, hidden_units, output_dim, dropout_rate=0.2):

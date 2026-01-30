@@ -1,0 +1,16 @@
+loss,val_loss,phase
+0.01282276,0.01766099,teacher_forcing
+0.010541841,0.017274138,teacher_forcing
+0.010816163,0.016665312,teacher_forcing
+0.011055807,0.016805176,teacher_forcing
+0.011133098,0.016685445,teacher_forcing
+0.012882882,0.021220058,scheduled_sampling
+0.01180389,0.022084253,scheduled_sampling
+0.011609603,0.02071029,scheduled_sampling
+0.011522484,0.019287588,scheduled_sampling
+0.011537435,0.018425709,scheduled_sampling
+0.011547732,0.017607942,scheduled_sampling
+0.011533137,0.017510546,scheduled_sampling
+0.011565841,0.017075391,scheduled_sampling
+0.011574789,0.016955338,scheduled_sampling
+0.011622114,0.016910458,scheduled_sampling

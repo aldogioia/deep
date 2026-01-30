@@ -1,5 +1,5 @@
 import tensorflow as tf
-from tensorflow.keras import layers, Model
+from keras import layers, Model
 
 class BaseAttention(layers.Layer):
     def __init__(self, **kwargs):
@@ -65,7 +65,9 @@ class LearnablePositionalEncoding(layers.Layer):
         )
 
     def call(self, x):
-        return x + self.pos_emb
+        curr_seq_len = tf.shape(x)[1]
+        
+        return x + self.pos_emb[:, :curr_seq_len, :]
     
 class EncoderLayer(layers.Layer):
     def __init__(self, d_model, num_heads, d_ff, dropout=0.1):
@@ -83,7 +85,7 @@ class EncoderLayer(layers.Layer):
             dropout=dropout
         )
 
-    def call(self, x, attn_mask=None, training=False):
+    def call(self, x):
         x = self.self_attention(x)
         x = self.feed_forward(x)
         return x

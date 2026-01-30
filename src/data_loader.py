@@ -35,9 +35,9 @@ class QuantumDataManager:
                 for i in range(len(t) - self.input_width - self.forecast_horizon + 1):
                     X.append(t[i : i + self.input_width])
                     y.append(t[i + self.input_width : i + self.input_width + self.forecast_horizon])
-        return np.array(X), np.array(y)
+        return np.array(X).astype(np.float32), np.array(y).astype(np.float32)
 
-    def load_and_process(self, test_size=0.2, random_state=42):
+    def load_and_process(self, num_rows=None, test_size=0.2, random_state=42):
         """
         Esegue la pipeline completa: Load -> Split Traj -> Train/Test Split -> Normalize -> Windowing
         
@@ -45,7 +45,7 @@ class QuantumDataManager:
             X_train, y_train, X_test, y_test (numpy arrays pronti per il modello)
         """
         # 1. Caricamento
-        df = pd.read_csv(self.file_path, header=None, index_col=False)
+        df = pd.read_csv(self.file_path, header=None, index_col=False, nrows=num_rows)
         print(f"Dataset caricato: {df.shape}")
 
         # 2. Split Traiettorie

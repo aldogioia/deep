@@ -8,6 +8,8 @@ class CurriculumLearning:
 
     @tf.function(reduce_retracing=True)
     def teacher_forcing_step(self, x, y):
+        y = tf.cast(y, tf.float32)
+        
         with tf.GradientTape() as tape:
             preds = self.model(
                 encoder_input=x,
@@ -22,6 +24,8 @@ class CurriculumLearning:
     
     @tf.function(reduce_retracing=True)
     def masked_modeling_step(self, x, y, mask_prob=0.15):
+        y = tf.cast(y, tf.float32)
+
         mask = tf.cast(
             tf.random.uniform(tf.shape(y)) < mask_prob,
             tf.float32
@@ -45,39 +49,25 @@ class CurriculumLearning:
         return loss
     
     @tf.function(reduce_retracing=True)
-    def scheduled_sampling_step(self, x, y, sampling_prob):
-        batch, T, d = tf.shape(y)[0], tf.shape(y)[1], tf.shape(y)[2]
+    def noise_robustness_step(self, x, y, noise_std=0.01):
+        y = tf.cast(y, tf.float32)
 
-        dec_in = tf.zeros_like(y[:, :1, :])  # start token (zero)
-
-        preds_all = []
+        noise = tf.random.normal(
+            shape=tf.shape(x),
+            mean=0.0,
+            stddev=noise_std,
+            dtype=tf.float32
+        )
+        x_noisy = x + noise
 
         with tf.GradientTape() as tape:
-            for t in range(T):
-                preds = self.model(
-                    encoder_input=x,
-                    decoder_input=dec_in,
-                    training=True
-                )
-
-                next_pred = preds[:, -1:, :]
-
-                use_model = tf.random.uniform((batch, 1, 1)) < sampling_prob
-                next_input = tf.where(
-                    use_model,
-                    next_pred,
-                    y[:, t:t+1, :]
-                )
-
-                dec_in = tf.concat([dec_in, next_input], axis=1)
-                preds_all.append(next_pred)
-
-            preds_all = tf.concat(preds_all, axis=1)
-
-            loss = self.loss_fn(y, preds_all)
+            preds = self.model(
+                encoder_input=x_noisy,
+                decoder_input=y,
+                training=True
+            )
+            loss = self.loss_fn(y, preds)
 
         grads = tape.gradient(loss, self.model.trainable_variables)
         self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))
         return loss
-
-    
