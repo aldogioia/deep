@@ -10,30 +10,46 @@ class BaseAttention(layers.Layer):
 
 class CrossAttention(BaseAttention):
     def call(self, x, context, training=False):
-        attn_output = self.mha(query=x,value=context,key=context, training=training)
+        attn_output, attn_scores = self.mha(
+            query=x, 
+            value=context, 
+            key=context, 
+            training=training,
+            return_attention_scores=True
+        )
 
         x = self.add([x, attn_output])
         x = self.layerNorm(x)
 
-        return x
+        return x, attn_scores
 
 class SelfAttention(BaseAttention):
-    def call(self, x):
-        attn_output = self.mha(query=x,value=x,key=x)
-
+    def call(self, x, training=False):
+        attn_output, attn_scores = self.mha(
+            query=x, 
+            value=x, 
+            key=x, 
+            return_attention_scores=True
+        )
+        
         x = self.add([x, attn_output])
         x = self.layerNorm(x)
 
-        return x
+        return x, attn_scores
     
 class CausalSelfAttention(BaseAttention):
     def call(self, x, training=False):
-        attn_output = self.mha(query=x,value=x,key=x, use_causal_mask=True, training=training)
+        attn_output, attn_scores = self.mha(
+            query=x, value=x, key=x,
+            use_causal_mask=True, 
+            return_attention_scores=True, 
+            training=training
+        )
 
         x = self.add([x, attn_output])
         x = self.layerNorm(x)
 
-        return x
+        return x, attn_scores
     
 class FeedForward(layers.Layer):
     def __init__(self, d_model, d_ff, dropout=0.1):
@@ -48,10 +64,8 @@ class FeedForward(layers.Layer):
 
     def call(self, x):
         ffn_output = self.seq(x)
-
         x = self.add([x, ffn_output])
         x = self.layerNorm(x)
-
         return x
 
 class LearnablePositionalEncoding(layers.Layer):
@@ -66,62 +80,70 @@ class LearnablePositionalEncoding(layers.Layer):
 
     def call(self, x):
         curr_seq_len = tf.shape(x)[1]
-        
         return x + self.pos_emb[:, :curr_seq_len, :]
     
 class EncoderLayer(layers.Layer):
     def __init__(self, d_model, num_heads, d_ff, dropout=0.1):
         super().__init__()
-
         self.self_attention = SelfAttention(
             num_heads=num_heads,
             key_dim=d_model,
             dropout=dropout
         )
-
         self.feed_forward = FeedForward(
             d_model=d_model,
             d_ff=d_ff,
             dropout=dropout
         )
 
-    def call(self, x):
-        x = self.self_attention(x)
+    def call(self, x, training=False, return_attn_scores=False):
+        x, self_scores = self.self_attention(
+            x,
+            training=training
+        )
+
         x = self.feed_forward(x)
+        if return_attn_scores:
+            return x, self_scores
         return x
 
 class DecoderLayer(layers.Layer):
     def __init__(self, d_model, num_heads, d_ff, dropout=0.1):
         super().__init__()
-
         self.causal_self_attention = CausalSelfAttention(
             num_heads=num_heads,
             key_dim=d_model,
             dropout=dropout
         )
-
         self.cross_attention = CrossAttention(
             num_heads=num_heads,
             key_dim=d_model,
             dropout=dropout
         )
-
         self.feed_forward = FeedForward(
             d_model=d_model,
             d_ff=d_ff,
             dropout=dropout
         )
         
-    def call(self, x, enc_out, training=False):
-        x = self.causal_self_attention(x, training=training)
-        x = self.cross_attention(x, enc_out, training=training)
+    def call(self, x, enc_out, training=False, return_attn_scores=False):
+        x, _ = self.causal_self_attention(x, training=training)
+        
+        x, cross_scores = self.cross_attention(
+            x, 
+            enc_out, 
+            training=training, 
+        )
+        
         x = self.feed_forward(x)
+
+        if return_attn_scores:
+            return x, cross_scores
         return x
 
 class QuantumTransformer(Model):
     def __init__(self, input_dim, seq_len, d_model, num_heads, d_ff, num_layers, dropout=0.1):
         super().__init__()
-
         self.seq_len = seq_len
         self.d_model = d_model
 
@@ -143,21 +165,53 @@ class QuantumTransformer(Model):
 
         self.output_head = layers.Dense(input_dim)
 
-    def call(self, encoder_input, decoder_input, training=False):
+    def call(self, encoder_input, decoder_input, training=False, return_attention=False):
         encoder_output = self.enc_input_proj(encoder_input)
         encoder_output = self.enc_pos(encoder_output)
 
-        for layer in self.encoder_layers:
-            encoder_output = layer(encoder_output)
+        attention_weights = {}
+
+        for i, layer in enumerate(self.encoder_layers):
+            if return_attention and i == len(self.encoder_layers) - 1:
+                encoder_output, weights = layer(
+                    encoder_output, 
+                    training=training, 
+                    return_attn_scores=True
+                )
+                attention_weights['encoder_self_attn'] = weights
+            else:
+                encoder_output = layer(
+                    encoder_output, 
+                    training=training, 
+                    return_attn_scores=False
+                )
 
         decoder_output = self.dec_input_proj(decoder_input)
-        decoder_output = self.dec_pos(decoder_output)
 
-        for layer in self.decoder_layers:
-            decoder_output = layer(
-                decoder_output,
-                encoder_output,
-                training=training
-            )
+        curr_dec_len = tf.shape(decoder_input)[1]
+        decoder_output = decoder_output + self.dec_pos.pos_emb[:, :curr_dec_len, :]
+
+        for i, layer in enumerate(self.decoder_layers):
+            # Logica per estrarre l'attenzione solo dall'ultimo layer
+            if return_attention and i == len(self.decoder_layers) - 1:
+                decoder_output, weights = layer(
+                    decoder_output, 
+                    encoder_output, 
+                    training=training, 
+                    return_attn_scores=True
+                )
+                attention_weights['decoder_cross_attn'] = weights
+            else:
+                decoder_output = layer(
+                    decoder_output, 
+                    encoder_output, 
+                    training=training, 
+                    return_attn_scores=False
+                )
         
-        return self.output_head(decoder_output)
+        final_output = self.output_head(decoder_output)
+
+        if return_attention:
+            return final_output, attention_weights
+        
+        return final_output

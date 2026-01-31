@@ -1,9 +1,6 @@
 loss,val_loss,phase
-0.028961942,0.03222924,teacher_forcing
-0.025904413,0.03253432,teacher_forcing
-0.025899978,0.031187896,teacher_forcing
-0.02593864,0.030521186,teacher_forcing
-0.025929287,0.031134875,teacher_forcing
-0.026360787,0.030354122,masked_modeling
-0.026004229,0.03166826,scheduled_sampling
-0.025940677,0.03021098,scheduled_sampling
+0.017071275,0.020253386,teacher_forcing
+0.010328623,0.019441832,teacher_forcing
+0.010790752,0.018277979,teacher_forcing
+0.012759225,0.019258937,masked_modeling
+0.011317495,0.01789062,scheduled_sampling

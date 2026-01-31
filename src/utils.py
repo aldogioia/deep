@@ -2,6 +2,7 @@ import os
 import tensorflow as tf
 import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 class ExperimentManager:
     def __init__(self, base_path="data"):
@@ -117,7 +118,7 @@ class ExperimentManager:
         ax1.grid(True, alpha=0.3)
 
         plt.tight_layout()
-        plot_path = os.path.join(self.plots_path, f"{config_name}_detailed_loss.png")
+        plot_path = os.path.join(self.plots_path, f"training/loss_{config_name}.png")
         plt.savefig(plot_path, dpi=300)
         plt.show()
         print(f"Grafico salvato in: {plot_path}")
@@ -192,7 +193,7 @@ class ExperimentManager:
                  linestyle='--', 
                  linewidth=1.5)
         
-        plt.title(f'Verifica Traiettoria Continua: {config_name} (Samples: {limit})', fontsize=14, fontweight='bold')
+        plt.title(f'Verifica Traiettoria: {config_name} (Samples: {limit})', fontsize=14, fontweight='bold')
         plt.xlabel('Time Steps')
         plt.ylabel('Valore Fisico')
         plt.legend(loc='upper right')
@@ -200,7 +201,55 @@ class ExperimentManager:
         # Griglia leggera come nell'immagine
         plt.grid(True, which='both', linestyle='-', linewidth=0.5, alpha=0.3)
         
-        plot_path = os.path.join(self.plots_path, f"{config_name}_continuous_traj.png")
+        plot_path = os.path.join(self.plots_path, f"predictions/pred_{config_name}.png")
         plt.savefig(plot_path, dpi=300, bbox_inches='tight')
         plt.show()
         print(f"Grafico salvato in: {plot_path}")
+
+    def plot_attention_map(self, model, data_manager, config_name, sample_idx=0):
+        import seaborn as sns
+        
+        # Preparazione dati
+        encoder_input = data_manager.X_test[sample_idx : sample_idx+1]
+        decoder_input = data_manager.y_test[sample_idx : sample_idx+1]
+        
+        encoder_input = tf.convert_to_tensor(encoder_input, dtype=tf.float32)
+        decoder_input = tf.convert_to_tensor(decoder_input, dtype=tf.float32)
+
+        print("Recupero mappe di attenzione...")
+        try:
+            _, attn_weights = model(encoder_input, decoder_input, training=False, return_attention=True)
+        except Exception as e:
+            print(f"Errore nel recupero pesi: {e}")
+            return
+
+        # Creiamo una figura con 2 subplot
+        fig, axes = plt.subplots(1, 2, figsize=(18, 7))
+        
+        # --- 1. ENCODER SELF-ATTENTION ---
+        if 'encoder_self_attn' in attn_weights:
+            enc_weights = tf.reduce_mean(attn_weights['encoder_self_attn'], axis=1)[0].numpy()
+            
+            sns.heatmap(enc_weights, cmap='viridis', ax=axes[0], square=True, cbar=True)
+            axes[0].set_title(f"Encoder Self-Attention (Input vs Input)\nConfig: {config_name}")
+            axes[0].set_xlabel("Input Key (Time t)")
+            axes[0].set_ylabel("Input Query (Time t)")
+        else:
+            axes[0].text(0.5, 0.5, "Encoder Attention Not Found", ha='center')
+
+        # --- 2. DECODER CROSS-ATTENTION ---
+        if 'decoder_cross_attn' in attn_weights:
+            dec_weights = tf.reduce_mean(attn_weights['decoder_cross_attn'], axis=1)[0].numpy()
+            
+            sns.heatmap(dec_weights, cmap='viridis', ax=axes[1], square=False, annot=True, cbar=True)
+            axes[1].set_title(f"Decoder Cross-Attention (Prediction vs History)\nConfig: {config_name}")
+            axes[1].set_xlabel(f"History Steps (t-{len(dec_weights[0])} ... t)")
+            axes[1].set_ylabel("Prediction Step (t+1 ...)")
+        else:
+            axes[1].text(0.5, 0.5, "Decoder Attention Not Found", ha='center')
+
+        plt.tight_layout()
+        plot_path = os.path.join(self.plots_path, f"attentions/att_{config_name}.png")
+        plt.savefig(plot_path, dpi=300)
+        plt.show()
+        print(f"Grafico combinato salvato in: {plot_path}")
